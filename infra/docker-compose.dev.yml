@@ -1,0 +1,67 @@
+name: lavra-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lavra-postgres
+    environment:
+      POSTGRES_USER: lavra
+      POSTGRES_PASSWORD: lavra_dev # dev only — never reuse outside localhost
+      POSTGRES_DB: lavra
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lavra"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Azure Blob Storage emulator
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    container_name: lavra-azurite
+    command: azurite-blob --blobHost 0.0.0.0 --location /data
+    ports:
+      - "10000:10000"
+    volumes:
+      - azurite-data:/data
+
+  # SQL Server backing store required by the Service Bus emulator
+  sqledge:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: lavra-sqledge
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "LavraDev!Passw0rd" # dev only
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P 'LavraDev!Passw0rd' -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # Azure Service Bus emulator (queues defined in servicebus-config.json)
+  servicebus:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
+    container_name: lavra-servicebus
+    environment:
+      ACCEPT_EULA: "Y"
+      SQL_SERVER: sqledge
+      MSSQL_SA_PASSWORD: "LavraDev!Passw0rd"
+    ports:
+      - "5672:5672"
+    volumes:
+      - ./servicebus-config.json:/ServiceBus_Emulator/ConfigFiles/Config.json:ro
+    depends_on:
+      sqledge:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  azurite-data:
+
+# Connection strings for local development:
+#   Postgres:    jdbc:postgresql://localhost:5432/lavra (lavra / lavra_dev)
+#   Blob:        UseDevelopmentStorage=true  (Azurite well-known account)
+#   Service Bus: Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;

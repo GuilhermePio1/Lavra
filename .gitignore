@@ -1,0 +1,41 @@
+# Segredos — nunca versionar
+.env
+.env.*
+*.pem
+*.key
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Configuração local de ferramentas (específica da máquina)
+.claude/settings.local.json
+.mcp.json
+
+# Java / Gradle
+core-api/build/
+core-api/.gradle/
+out/
+
+# Python
+media-worker/.venv/
+media-worker/__pycache__/
+**/__pycache__/
+*.pyc
+.ruff_cache/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Terraform
+infra/**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# SO
+.DS_Store
+Thumbs.db

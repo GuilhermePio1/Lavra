@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lavra.dev/contracts/events/media.processed.v1.json",
+  "title": "media.processed.v1",
+  "description": "Published by media-worker when audio cleanup and transcription completed successfully. Consumed by core-api, which then starts content generation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventType", "occurredAt", "data"],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "eventType": {
+      "const": "media.processed.v1"
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["episodeId", "cleanAudioBlobPath", "transcriptBlobPath", "durationSeconds", "metrics"],
+      "properties": {
+        "episodeId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "cleanAudioBlobPath": {
+          "type": "string",
+          "examples": ["processed/6f1d2c3a-0000-0000-0000-000000000000/clean.mp3"]
+        },
+        "transcriptBlobPath": {
+          "type": "string",
+          "description": "Canonical transcript JSON (format defined in spec 0002).",
+          "examples": ["processed/6f1d2c3a-0000-0000-0000-000000000000/transcript.json"]
+        },
+        "durationSeconds": {
+          "type": "number",
+          "description": "Duration of the CLEAN audio, in seconds."
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["inputLoudnessLufs", "outputLoudnessLufs", "silenceRemovedSeconds"],
+          "properties": {
+            "inputLoudnessLufs": { "type": "number" },
+            "outputLoudnessLufs": { "type": "number" },
+            "silenceRemovedSeconds": { "type": "number" },
+            "noiseReductionApplied": { "type": "boolean" }
+          }
+        },
+        "transcriptionProvider": {
+          "type": "string",
+          "description": "Provider identifier, e.g. azure-openai-whisper."
+        }
+      }
+    }
+  }
+}

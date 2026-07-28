@@ -1,0 +1,394 @@
+openapi: 3.1.0
+info:
+  title: lavra Core API
+  version: "1.0.0"
+  description: >
+    REST API do lavra. Fonte da verdade do contrato frontend → core-api.
+    O código segue este contrato, não o contrário.
+
+servers:
+  - url: /api/v1
+
+security:
+  - bearerAuth: []
+
+paths:
+  /me:
+    get:
+      operationId: getCurrentUser
+      summary: Perfil do usuário autenticado, plano vigente e consumo do período
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /episodes:
+    post:
+      operationId: uploadEpisode
+      summary: Upload de um novo episódio (áudio bruto)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [audio]
+              properties:
+                audio:
+                  type: string
+                  format: binary
+                  description: mp3, wav, m4a ou flac. Máx. 2 GB.
+                title:
+                  type: string
+                  maxLength: 200
+                  description: Título de trabalho (opcional; a IA sugerirá títulos).
+      responses:
+        "201":
+          description: Episódio criado; pipeline iniciado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Episode"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Cota do plano esgotada (code = PLAN_QUOTA_EXCEEDED).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "413":
+          description: Arquivo excede o limite.
+    get:
+      operationId: listEpisodes
+      summary: Lista episódios do show
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/EpisodeStatus"
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: Página de episódios, mais recentes primeiro.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, page, totalItems]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Episode"
+                  page: { type: integer }
+                  totalItems: { type: integer }
+
+  /episodes/{episodeId}:
+    parameters:
+      - $ref: "#/components/parameters/EpisodeId"
+    get:
+      operationId: getEpisode
+      summary: Detalhe do episódio (estado + histórico de transições)
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpisodeDetail"
+          description: OK
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /episodes/{episodeId}/content:
+    parameters:
+      - $ref: "#/components/parameters/EpisodeId"
+    get:
+      operationId: getEpisodeContent
+      summary: Conteúdo gerado (títulos, descrição, capítulos, tags)
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpisodeContent"
+          description: OK
+        "409":
+          description: Episódio ainda não chegou a IN_REVIEW.
+    patch:
+      operationId: updateEpisodeContent
+      summary: Edita campos do conteúdo em revisão
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EpisodeContentPatch"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpisodeContent"
+          description: Conteúdo atualizado.
+        "409":
+          description: Episódio não está em IN_REVIEW.
+
+  /episodes/{episodeId}/content/regenerate:
+    parameters:
+      - $ref: "#/components/parameters/EpisodeId"
+    post:
+      operationId: regenerateArtifact
+      summary: Regenera um artefato específico via IA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [artifact]
+              properties:
+                artifact:
+                  type: string
+                  enum: [TITLES, DESCRIPTION, CHAPTERS, TAGS]
+                instruction:
+                  type: string
+                  maxLength: 500
+                  description: Instrução opcional do criador ("menos formal", etc.).
+      responses:
+        "202":
+          description: Regeneração iniciada.
+        "409":
+          description: Episódio não está em IN_REVIEW.
+
+  /episodes/{episodeId}/approve:
+    parameters:
+      - $ref: "#/components/parameters/EpisodeId"
+    post:
+      operationId: approveEpisode
+      summary: Aprova o episódio (IN_REVIEW → READY) e alimenta o perfil de voz
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Episode"
+          description: Aprovado.
+        "409":
+          description: Episódio não está em IN_REVIEW.
+
+  /episodes/{episodeId}/export:
+    parameters:
+      - $ref: "#/components/parameters/EpisodeId"
+    get:
+      operationId: exportEpisode
+      summary: Links e textos finais para publicação
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [audioUrl, content]
+                properties:
+                  audioUrl:
+                    type: string
+                    format: uri
+                    description: URL temporária (SAS) do áudio final.
+                  content:
+                    $ref: "#/components/schemas/EpisodeContent"
+          description: OK
+        "409":
+          description: Episódio não está em READY.
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Access token OIDC emitido pelo Microsoft Entra External ID (ADR-0009).
+        Autorização de negócio (posse, plano, cota) é aplicada pelo core-api:
+        recurso de outro usuário retorna 404; cota esgotada retorna 403.
+
+  parameters:
+    EpisodeId:
+      name: episodeId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Requisição inválida.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    NotFound:
+      description: >
+        Recurso não encontrado — inclusive quando o recurso existe mas pertence
+        a outro usuário (posse estrita, spec 0004).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+    Unauthorized:
+      description: Token ausente, inválido ou expirado.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ApiError"
+
+  schemas:
+    EpisodeStatus:
+      type: string
+      enum:
+        - RECEIVED
+        - AUDIO_PROCESSING
+        - TRANSCRIBING
+        - GENERATING
+        - IN_REVIEW
+        - READY
+        - FAILED
+
+    Episode:
+      type: object
+      required: [id, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        workingTitle: { type: string }
+        status:
+          $ref: "#/components/schemas/EpisodeStatus"
+        durationSeconds: { type: number }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    EpisodeDetail:
+      allOf:
+        - $ref: "#/components/schemas/Episode"
+        - type: object
+          properties:
+            failure:
+              type: object
+              description: Presente apenas quando status = FAILED.
+              properties:
+                stage: { type: string }
+                errorCode: { type: string }
+                errorMessage: { type: string }
+                retryable: { type: boolean }
+            transitions:
+              type: array
+              items:
+                type: object
+                required: [fromStatus, toStatus, at]
+                properties:
+                  fromStatus: { $ref: "#/components/schemas/EpisodeStatus" }
+                  toStatus: { $ref: "#/components/schemas/EpisodeStatus" }
+                  at: { type: string, format: date-time }
+
+    EpisodeContent:
+      type: object
+      required: [titles, description, chapters, tags]
+      properties:
+        titles:
+          type: array
+          minItems: 3
+          maxItems: 5
+          items: { type: string, maxLength: 90 }
+        selectedTitleIndex:
+          type: integer
+          description: Índice do título escolhido pelo criador.
+        description:
+          type: string
+        chapters:
+          type: array
+          items:
+            type: object
+            required: [startSeconds, title]
+            properties:
+              startSeconds: { type: number }
+              title: { type: string, maxLength: 60 }
+        tags:
+          type: array
+          items: { type: string }
+
+    EpisodeContentPatch:
+      type: object
+      description: Todos os campos opcionais; apenas os enviados são atualizados.
+      properties:
+        titles:
+          type: array
+          items: { type: string, maxLength: 90 }
+        selectedTitleIndex: { type: integer }
+        description: { type: string }
+        chapters:
+          type: array
+          items:
+            type: object
+            required: [startSeconds, title]
+            properties:
+              startSeconds: { type: number }
+              title: { type: string, maxLength: 60 }
+        tags:
+          type: array
+          items: { type: string }
+
+    ApiError:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Código estável, ex. PLAN_QUOTA_EXCEEDED, VALIDATION_ERROR.
+        message: { type: string }
+
+    UserProfile:
+      type: object
+      required: [id, email, plan, usage]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        displayName: { type: string }
+        plan:
+          type: object
+          required: [code, name]
+          properties:
+            code:
+              type: string
+              enum: [FREE, CREATOR, STUDIO]
+            name: { type: string }
+        usage:
+          type: object
+          required:
+            - periodStart
+            - periodEnd
+            - processedMinutesUsed
+            - processedMinutesLimit
+            - showsUsed
+            - showsLimit
+          properties:
+            periodStart: { type: string, format: date-time }
+            periodEnd: { type: string, format: date-time }
+            processedMinutesUsed:
+              type: integer
+              description: Pode exceder o limite (overdraft único, spec 0004).
+            processedMinutesLimit: { type: integer }
+            showsUsed: { type: integer }
+            showsLimit: { type: integer }

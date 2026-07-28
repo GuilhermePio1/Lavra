@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lavra.dev/contracts/events/episode.uploaded.v1.json",
+  "title": "episode.uploaded.v1",
+  "description": "Published by core-api when a raw episode audio file has been stored in Blob Storage and is ready for media processing. Consumed by media-worker.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventType", "occurredAt", "data"],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Unique id of this event instance, for idempotency/dedup."
+    },
+    "eventType": {
+      "const": "episode.uploaded.v1"
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "UTC timestamp of when the event occurred."
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["episodeId", "showId", "rawAudioBlobPath", "originalFilename", "contentType"],
+      "properties": {
+        "episodeId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "showId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "rawAudioBlobPath": {
+          "type": "string",
+          "description": "Container-relative blob path of the raw audio, e.g. raw/{episodeId}/original.mp3.",
+          "examples": ["raw/6f1d2c3a-0000-0000-0000-000000000000/original.mp3"]
+        },
+        "originalFilename": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "contentType": {
+          "type": "string",
+          "enum": ["audio/mpeg", "audio/wav", "audio/x-wav", "audio/mp4", "audio/flac"]
+        },
+        "processingOptions": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Per-episode overrides for the audio chain (spec 0002). Omitted keys use defaults.",
+          "properties": {
+            "noiseReduction": { "type": "boolean" },
+            "silenceTrimming": { "type": "boolean" },
+            "stereo": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  }
+}

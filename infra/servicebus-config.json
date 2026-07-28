@@ -1,0 +1,39 @@
+{
+  "UserConfig": {
+    "Namespaces": [
+      {
+        "Name": "sbemulatorns",
+        "Queues": [
+          {
+            "Name": "episode-uploaded",
+            "Properties": {
+              "DeadLetteringOnMessageExpiration": true,
+              "LockDuration": "PT5M",
+              "MaxDeliveryCount": 5
+            }
+          },
+          {
+            "Name": "media-processed",
+            "Properties": {
+              "DeadLetteringOnMessageExpiration": true,
+              "LockDuration": "PT1M",
+              "MaxDeliveryCount": 5
+            }
+          },
+          {
+            "Name": "processing-failed",
+            "Properties": {
+              "DeadLetteringOnMessageExpiration": true,
+              "LockDuration": "PT1M",
+              "MaxDeliveryCount": 5
+            }
+          }
+        ],
+        "Topics": []
+      }
+    ],
+    "Logging": {
+      "Type": "File"
+    }
+  }
+}

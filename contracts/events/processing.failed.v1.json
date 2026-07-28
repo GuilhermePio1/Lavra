@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lavra.dev/contracts/events/processing.failed.v1.json",
+  "title": "processing.failed.v1",
+  "description": "Published by media-worker when audio processing or transcription failed after exhausting retries. Consumed by core-api, which moves the episode to FAILED.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "eventType", "occurredAt", "data"],
+  "properties": {
+    "eventId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "eventType": {
+      "const": "processing.failed.v1"
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["episodeId", "stage", "errorCode", "errorMessage", "retryable"],
+      "properties": {
+        "episodeId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "stage": {
+          "type": "string",
+          "enum": ["AUDIO_PROCESSING", "TRANSCRIBING"],
+          "description": "Pipeline stage where the failure happened."
+        },
+        "errorCode": {
+          "type": "string",
+          "description": "Stable machine-readable code, e.g. CORRUPT_AUDIO, UNSUPPORTED_CODEC, TRANSCRIPTION_API_ERROR, BLOB_NOT_FOUND.",
+          "examples": ["CORRUPT_AUDIO", "TRANSCRIPTION_API_ERROR"]
+        },
+        "errorMessage": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Human-readable detail for logs and the review UI. Must not contain secrets."
+        },
+        "retryable": {
+          "type": "boolean",
+          "description": "Whether re-publishing episode.uploaded for this episode is likely to succeed."
+        }
+      }
+    }
+  }
+}
