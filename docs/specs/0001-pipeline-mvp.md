@@ -19,14 +19,15 @@ Entregar o fluxo mínimo que resolve a dor central: **o criador sobe um áudio b
 ## Máquina de estados
 
 ```
-RECEIVED ──► AUDIO_PROCESSING ──► TRANSCRIBING ──► GENERATING ──► IN_REVIEW ──► READY
-                    │                   │               │
-                    └───────────────────┴───────────────┴──► FAILED
+PENDING_UPLOAD ──► RECEIVED ──► AUDIO_PROCESSING ──► TRANSCRIBING ──► GENERATING ──► IN_REVIEW ──► READY
+                                       │                   │               │
+                                       └───────────────────┴───────────────┴──► FAILED
 ```
 
 | Estado | Significado | Quem transiciona |
 |---|---|---|
-| `RECEIVED` | Áudio bruto no Blob; episódio registrado | Core API (no upload) |
+| `PENDING_UPLOAD` | Episódio registrado; aguardando os bytes do áudio no Blob | Core API (ao emitir a SAS) |
+| `RECEIVED` | Áudio bruto no Blob; upload confirmado | Core API (no `upload-complete`) |
 | `AUDIO_PROCESSING` | Worker limpando/normalizando o áudio | Core API (ao publicar `episode.uploaded`) |
 | `TRANSCRIBING` | Worker transcrevendo via Whisper | Media Worker (reporta progresso) |
 | `GENERATING` | Core chamando o Claude para gerar conteúdo | Core API (ao consumir `media.processed`) |
@@ -39,10 +40,11 @@ Regras:
 - A fonte da verdade do estado é o Postgres (Core API). O worker **não** conhece estados — apenas consome e publica eventos.
 - Transições são registradas em tabela de histórico (`episode_state_transitions`) com timestamp e causa — alimenta a UI de acompanhamento e o debug.
 - `FAILED` guarda `stage`, `errorCode` e `errorMessage` do evento de falha. Reprocessar (re-publicar `episode.uploaded`) é permitido a partir de `FAILED`.
+- Episódios parados em `PENDING_UPLOAD` há mais de 24 h são removidos por job periódico, junto com o blob parcial — upload abandonado não vira lixo permanente nem aparece na lista do criador.
 
 ## Fluxo detalhado
 
-1. **Upload** — `POST /api/v1/episodes` (multipart). Core valida formato (mp3/wav/m4a/flac, ≤ 2 GB), grava o bruto no Blob (`raw/{episodeId}/original.{ext}`), cria o episódio em `RECEIVED`, publica `episode.uploaded.v1` e transiciona para `AUDIO_PROCESSING`.
+1. **Upload** — `POST /api/v1/episodes` valida posse do show e saldo de cota, cria o episódio em `PENDING_UPLOAD` e devolve uma SAS de escrita restrita a `raw/{episodeId}/original.{ext}` (TTL 2 h). O browser envia o arquivo em blocos direto ao Blob (mp3/wav/m4a/flac, ≤ 2 GB). `POST /api/v1/episodes/{id}/upload-complete` valida o blob (existência, tamanho, `Content-Type`), transiciona para `RECEIVED`, publica `episode.uploaded.v1` e vai para `AUDIO_PROCESSING`. Ver ADR-0011.
 2. **Processamento de mídia** — Worker consome `episode.uploaded.v1`: executa a cadeia FFmpeg (spec 0002), grava o áudio limpo em `processed/{episodeId}/clean.mp3`, transcreve (ADR-0008), grava a transcrição canônica em `processed/{episodeId}/transcript.json` e publica `media.processed.v1`.
 3. **Geração de conteúdo** — Core consome `media.processed.v1`, transiciona para `GENERATING` e chama o Claude (spec 0003). Resultado persistido no Postgres; estado vai a `IN_REVIEW`.
 4. **Revisão** — Frontend exibe player do áudio limpo + artefatos gerados. O criador pode: editar qualquer texto, escolher entre as opções de título, regenerar um artefato específico, aprovar tudo.

@@ -47,11 +47,11 @@ Toda decisão de arquitetura está registrada em [ADRs](docs/adr/) — comece pe
 ## O pipeline
 
 ```
-RECEIVED → AUDIO_PROCESSING → TRANSCRIBING → GENERATING → IN_REVIEW → READY
-                     └──────────────┴─────────────┴──► FAILED (com retry)
+PENDING_UPLOAD → RECEIVED → AUDIO_PROCESSING → TRANSCRIBING → GENERATING → IN_REVIEW → READY
+                                    └──────────────┴─────────────┴──► FAILED (com retry)
 ```
 
-1. **Upload** — o criador sobe o áudio bruto pelo frontend.
+1. **Upload** — o criador sobe o áudio bruto pelo frontend, direto para o Blob Storage ([ADR-0011](docs/adr/0011-upload-direto-ao-blob-com-sas.md)).
 2. **Limpeza** — o worker normaliza loudness (-16 LUFS), remove silêncios longos e reduz ruído.
 3. **Transcrição** — Whisper (Azure OpenAI) transcreve com timestamps.
 4. **Geração** — o Claude gera 3–5 opções de título, descrição, capítulos e tags a partir da transcrição, calibrado pela voz do criador.

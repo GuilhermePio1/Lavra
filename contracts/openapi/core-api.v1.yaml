@@ -1,10 +1,20 @@
 openapi: 3.1.0
 info:
   title: lavra Core API
-  version: "1.0.0"
+  version: "1.1.0"
+  license:
+    name: PolyForm Noncommercial License 1.0.0
+    url: https://polyformproject.org/licenses/noncommercial/1.0.0/
   description: >
     REST API do lavra. Fonte da verdade do contrato frontend → core-api.
     O código segue este contrato, não o contrário.
+
+    Revisão 1.1.0 (ADR-0011): o áudio bruto deixou de trafegar pela API.
+    POST /episodes passou de multipart para JSON e devolve uma SAS de escrita;
+    o browser envia o arquivo direto ao Blob e confirma em
+    POST /episodes/{episodeId}/upload-complete. Alteração breaking aplicada na
+    v1 em vez de gerar v2 por não haver implementação nem cliente consumindo
+    este contrato.
 
 servers:
   - url: /api/v1
@@ -29,31 +39,27 @@ paths:
 
   /episodes:
     post:
-      operationId: uploadEpisode
-      summary: Upload de um novo episódio (áudio bruto)
+      operationId: createEpisodeUpload
+      summary: Registra um novo episódio e emite a SAS para o upload do áudio bruto
+      description: >
+        Valida posse do show e saldo de cota, cria o episódio em PENDING_UPLOAD e
+        devolve uma SAS de escrita restrita ao blob do próprio episódio. O arquivo
+        NÃO é enviado neste request: o cliente faz PUT em blocos direto no Blob
+        Storage usando a SAS e depois chama upload-complete. O pipeline só arranca
+        na confirmação.
       requestBody:
         required: true
         content:
-          multipart/form-data:
+          application/json:
             schema:
-              type: object
-              required: [audio]
-              properties:
-                audio:
-                  type: string
-                  format: binary
-                  description: mp3, wav, m4a ou flac. Máx. 2 GB.
-                title:
-                  type: string
-                  maxLength: 200
-                  description: Título de trabalho (opcional; a IA sugerirá títulos).
+              $ref: "#/components/schemas/EpisodeUploadRequest"
       responses:
         "201":
-          description: Episódio criado; pipeline iniciado.
+          description: Episódio criado em PENDING_UPLOAD; SAS emitida.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Episode"
+                $ref: "#/components/schemas/EpisodeUploadTicket"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -64,12 +70,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ApiError"
+        "404":
+          $ref: "#/components/responses/NotFound"
         "413":
-          description: Arquivo excede o limite.
+          description: sizeBytes declarado excede o limite de 2 GB.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
     get:
       operationId: listEpisodes
-      summary: Lista episódios do show
+      summary: Lista episódios do usuário, opcionalmente filtrados por show
       parameters:
+        - name: showId
+          in: query
+          required: false
+          description: >
+            Restringe ao show informado; deve ser do usuário autenticado
+            (404 caso contrário). Omitido, lista os episódios de todos os shows
+            do usuário.
+          schema:
+            type: string
+            format: uuid
         - name: status
           in: query
           required: false
@@ -96,6 +118,76 @@ paths:
                       $ref: "#/components/schemas/Episode"
                   page: { type: integer }
                   totalItems: { type: integer }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /episodes/{episodeId}/upload-ticket:
+    parameters:
+      - $ref: "#/components/parameters/EpisodeId"
+    post:
+      operationId: renewEpisodeUploadTicket
+      summary: Reemite a SAS de escrita de um upload em andamento
+      description: >
+        Para uploads longos cuja SAS expira antes do fim. Não recria o episódio nem
+        recheca cota — apenas emite nova SAS para o mesmo blob, preservando os
+        blocos já enviados.
+      responses:
+        "200":
+          description: Nova SAS emitida.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EpisodeUploadTicket"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Episódio não está em PENDING_UPLOAD.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /episodes/{episodeId}/upload-complete:
+    parameters:
+      - $ref: "#/components/parameters/EpisodeId"
+    post:
+      operationId: completeEpisodeUpload
+      summary: Confirma que o áudio bruto foi enviado ao Blob e inicia o pipeline
+      description: >
+        Valida o blob gravado (existência, tamanho e Content-Type conforme o
+        declarado na criação), transiciona PENDING_UPLOAD → RECEIVED, publica
+        episode.uploaded.v1 e segue para AUDIO_PROCESSING. Idempotente: chamar de
+        novo com o episódio já em RECEIVED (ou adiante) devolve 200 sem republicar
+        o evento.
+      responses:
+        "200":
+          description: Upload confirmado; pipeline iniciado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Episode"
+        "400":
+          description: >
+            Blob ausente ou divergente do declarado
+            (code = UPLOAD_NOT_FOUND | UPLOAD_MISMATCH).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Episódio já falhou ou foi expirado pelo job de limpeza.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 
   /episodes/{episodeId}:
     parameters:
@@ -260,6 +352,7 @@ components:
     EpisodeStatus:
       type: string
       enum:
+        - PENDING_UPLOAD
         - RECEIVED
         - AUDIO_PROCESSING
         - TRANSCRIBING
@@ -267,6 +360,66 @@ components:
         - IN_REVIEW
         - READY
         - FAILED
+
+    EpisodeUploadRequest:
+      type: object
+      required: [showId, filename, contentType, sizeBytes]
+      properties:
+        showId:
+          type: string
+          format: uuid
+          description: Show ao qual o episódio pertence; deve ser do usuário autenticado.
+        filename:
+          type: string
+          maxLength: 255
+          description: Nome original do arquivo; só a extensão é usada no caminho do blob.
+        contentType:
+          type: string
+          description: Deve casar com o Content-Type enviado ao Blob no PUT.
+          enum:
+            - audio/mpeg
+            - audio/wav
+            - audio/x-wav
+            - audio/mp4
+            - audio/flac
+        sizeBytes:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 2147483648
+          description: Tamanho declarado, validado contra o blob no upload-complete.
+        title:
+          type: string
+          maxLength: 200
+          description: Título de trabalho (opcional; a IA sugerirá títulos).
+
+    EpisodeUploadTicket:
+      type: object
+      required: [episode, upload]
+      properties:
+        episode:
+          $ref: "#/components/schemas/Episode"
+        upload:
+          type: object
+          required: [url, blobPath, expiresAt]
+          properties:
+            url:
+              type: string
+              format: uri
+              description: >
+                SAS de escrita, restrita a este blob e sem permissão de leitura ou
+                listagem. O cliente envia em blocos com o SDK do Azure Storage.
+            blobPath:
+              type: string
+              description: Caminho relativo ao contêiner, ex. raw/{episodeId}/original.mp3.
+              examples: ["raw/6f1d2c3a-0000-0000-0000-000000000000/original.mp3"]
+            expiresAt:
+              type: string
+              format: date-time
+              description: >
+                Expiração da SAS (2 h). Upload longo que ultrapasse o prazo pede
+                uma nova SAS em POST /episodes/{episodeId}/upload-ticket e retoma
+                os blocos que faltam — não é preciso recomeçar.
 
     Episode:
       type: object
