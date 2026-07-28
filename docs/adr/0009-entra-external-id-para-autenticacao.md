@@ -28,3 +28,5 @@ O lavra é um produto por assinatura: pessoas compram planos, e o acesso (quanto
 - Zero senha sob nossa custódia; MFA, reset e proteção de conta vêm prontos; 50k MAU gratuitos cobrem qualquer horizonte realista.
 - Portfólio demonstra integração OIDC de ponta a ponta (MSAL → JWT → resource server) — competência muito demandada.
 - Custos assumidos: configuração de tenant do Entra tem curva de aprendizado; dev local precisa de um tenant de teste (ou perfil `dev` com token mockado, documentado e impossível de ativar em produção). Lock-in leve, mitigado por ser OIDC padrão — trocar de IdP não toca o domínio.
+
+> **Nota (2026-07-28):** o dev local foi resolvido pelo **ADR-0012** — emulador de OIDC no compose, e não perfil com token mockado, que foi explicitamente rejeitado.

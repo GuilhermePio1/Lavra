@@ -17,6 +17,7 @@ Infra Azure: Container Apps, PostgreSQL Flexible Server, Blob Storage, Service B
 ## Autenticação e planos
 
 - **Identidade:** Microsoft Entra External ID (OIDC; MSAL no frontend, Spring Security resource server no core) — ADR-0009. Provisionamento JIT de usuários.
+- **Dev local:** emulador de OIDC no compose (`mock-oauth2-server`, issuer `lavra`) — ADR-0012. A configuração de segurança é **a mesma em todos os ambientes**: só muda `issuer-uri`. Nunca criar `JwtDecoder` mockado, `permitAll` por perfil ou qualquer bypass de autenticação no código.
 - **Autorização de negócio no domínio, não no IdP:** posse (User → Show → Episode), planos (`FREE`/`CREATOR`/`STUDIO`), cota em **minutos processados/mês** com ledger imutável — spec 0004.
 - Regras que o código deve respeitar: recurso de outro usuário → **404** (não 403); cota esgotada no upload → `403 PLAN_QUOTA_EXCEEDED`; episódio em processamento nunca é abortado por cota (overdraft único); reprocessamento não debita duas vezes.
 
@@ -44,7 +45,7 @@ O áudio bruto **não** trafega pelo Core API: o upload vai direto do browser pa
 ## Ambiente de desenvolvimento
 
 - SO do desenvolvedor: **Windows 11** (PowerShell). Scripts em `scripts/*.ps1`.
-- `scripts/dev-up.ps1` sobe Postgres + Azurite + emulador do Service Bus (`infra/docker-compose.dev.yml`).
+- `scripts/dev-up.ps1` sobe Postgres + Azurite + emulador do Service Bus + emulador de OIDC (`infra/docker-compose.dev.yml`).
 - Segredos **nunca** em código ou compose: local via variáveis de ambiente/`.env` (gitignored); produção via Key Vault.
 
 ## Skills disponíveis
