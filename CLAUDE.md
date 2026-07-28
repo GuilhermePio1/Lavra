@@ -38,6 +38,8 @@ O áudio bruto **não** trafega pelo Core API: o upload vai direto do browser pa
 ## Convenções por serviço
 
 - **Java:** Gradle (Kotlin DSL), pacote raiz `dev.lavra`. Migrations com **Flyway em SQL puro**, forward-only, e o ORM nunca gera DDL (`ddl-auto: validate`) — ADR-0010. Preferir os recursos do Spring Boot 4 (HTTP service clients declarativos, `@Retryable`/`@ConcurrencyLimit`, API versioning) — parte do valor de portfólio é demonstrá-los.
+- **Estrutura do core-api:** package-by-feature (`identity`, `episode`, `content`, `shared`), cada feature com `domain`/`web`/`persistence` e, se integrar, `messaging`/`claude` — ADR-0013. O `domain` não leva anotação de framework: regra de estado e de cota se testa sem contexto Spring. **Port só para sistema externo que não seja o banco** (Blob, Service Bus, Claude); CRUD sem regra vai direto de controller a repository.
+- **Dados:** Spring Data JPA/Hibernate, entidades restritas ao `persistence` da feature, `open-in-view: false` — ADR-0014. Agregação do ledger em query nativa, não JPQL.
 - **Python:** gerenciado com `uv`, lint/format com `ruff`, type hints obrigatórios.
 - **TypeScript:** Next.js App Router, `pnpm`.
 - **FFmpeg:** parâmetros de áudio definidos em `docs/specs/0002-processamento-de-audio.md` — não inventar valores.
