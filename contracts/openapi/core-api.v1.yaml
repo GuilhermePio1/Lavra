@@ -77,8 +77,18 @@ paths:
                 $ref: "#/components/schemas/ApiError"
     get:
       operationId: listEpisodes
-      summary: Lista episódios do show
+      summary: Lista episódios do usuário, opcionalmente filtrados por show
       parameters:
+        - name: showId
+          in: query
+          required: false
+          description: >
+            Restringe ao show informado; deve ser do usuário autenticado
+            (404 caso contrário). Omitido, lista os episódios de todos os shows
+            do usuário.
+          schema:
+            type: string
+            format: uuid
         - name: status
           in: query
           required: false

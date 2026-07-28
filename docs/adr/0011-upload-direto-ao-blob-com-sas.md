@@ -19,6 +19,8 @@ O fluxo passa a ser:
 
 A máquina de estados ganha `PENDING_UPLOAD` como estado inicial, anterior a `RECEIVED`. Um job periódico remove episódios parados em `PENDING_UPLOAD` há mais de 24 h, junto com o blob parcial. O CORS da conta de storage é restrito à origem do frontend.
 
+Como um arquivo de 2 GB em conexão residencial pode levar mais que o TTL da SAS, `POST /api/v1/episodes/{id}/upload-ticket` reemite a credencial para um episódio ainda em `PENDING_UPLOAD` — sem recriar o episódio nem rechecar cota, preservando os blocos já enviados. Sem isso, expirar no meio do envio significaria recomeçar do zero, que é exatamente o problema que este ADR existe para resolver.
+
 ## Alternativas consideradas
 
 - **Manter multipart pela API (contrato v1 atual)** — um endpoint só e nenhum órfão possível, mas paga com o problema que motivou este ADR: réplica ocupada durante toda a transferência, teto de 240 s no ingress e nenhuma retomada. Para arquivos de centenas de MB em conexão residencial, é falha previsível, não caso de borda.
