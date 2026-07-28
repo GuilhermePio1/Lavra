@@ -81,7 +81,7 @@ lavra/
 Pré-requisitos: Docker Desktop.
 
 ```powershell
-# Sobe Postgres + Azurite (Blob) + emulador do Service Bus
+# Sobe Postgres + Azurite (Blob) + emulador do Service Bus + emulador de OIDC
 .\scripts\dev-up.ps1
 
 # Derruba tudo
@@ -89,6 +89,8 @@ Pré-requisitos: Docker Desktop.
 ```
 
 Em Linux/macOS: `docker compose -f infra/docker-compose.dev.yml up -d`.
+
+**Nenhuma conta Azure é necessária para rodar localmente.** A autenticação em desenvolvimento usa um emulador de OIDC no lugar do Entra ([ADR-0012](docs/adr/0012-autenticacao-no-desenvolvimento-local.md)): pegue um token em `http://localhost:8081/lavra/debugger` e troque de usuário na tela de login para exercitar posse e papéis.
 
 Cada serviço terá seu próprio README com instruções de build e execução.
 
