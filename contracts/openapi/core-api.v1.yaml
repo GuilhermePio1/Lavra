@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: lavra Core API
-  version: "1.1.0"
+  version: "1.2.0"
   license:
     name: PolyForm Noncommercial License 1.0.0
     url: https://polyformproject.org/licenses/noncommercial/1.0.0/
@@ -15,6 +15,11 @@ info:
     POST /episodes/{episodeId}/upload-complete. Alteração breaking aplicada na
     v1 em vez de gerar v2 por não haver implementação nem cliente consumindo
     este contrato.
+
+    Revisão 1.2.0: adicionados os endpoints de shows (spec 0004). O show é o
+    agregado dono dos episódios e portador do perfil de voz (spec 0003); sem
+    ele não havia como criar o showId exigido em POST /episodes. Mudança
+    puramente aditiva.
 
 servers:
   - url: /api/v1
@@ -36,6 +41,165 @@ paths:
                 $ref: "#/components/schemas/UserProfile"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /shows:
+    get:
+      operationId: listShows
+      summary: Lista os shows do usuário autenticado
+      description: >
+        Sem paginação: o teto de shows por plano (maxShows, spec 0004) é baixo
+        o bastante para caber sempre em uma resposta.
+      responses:
+        "200":
+          description: Shows do usuário, mais recentes primeiro.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Show"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createShow
+      summary: Cria um show
+      description: >
+        Valida o teto de shows do plano vigente antes de criar. O perfil de voz
+        (spec 0003) nasce vazio e é editado em
+        PUT /shows/{showId}/voice-profile.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShowCreateRequest"
+      responses:
+        "201":
+          description: Show criado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Show"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: >
+            Teto de shows do plano já atingido
+            (code = PLAN_SHOW_LIMIT_EXCEEDED).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /shows/{showId}:
+    parameters:
+      - $ref: "#/components/parameters/ShowId"
+    get:
+      operationId: getShow
+      summary: Detalhe do show
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Show"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      operationId: updateShow
+      summary: Edita nome e descrição do show
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShowPatch"
+      responses:
+        "200":
+          description: Show atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Show"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteShow
+      summary: Remove um show vazio
+      description: >
+        Só remove show sem episódios — apagar em cascata destruiria áudio,
+        transcrições e o perfil de voz acumulado. Para liberar um slot do plano
+        ocupado por show com episódios, os episódios são removidos primeiro.
+      responses:
+        "204":
+          description: Show removido.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Show ainda tem episódios (code = SHOW_NOT_EMPTY).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+
+  /shows/{showId}/voice-profile:
+    parameters:
+      - $ref: "#/components/parameters/ShowId"
+    get:
+      operationId: getShowVoiceProfile
+      summary: Perfil de voz do show (tom, anti-exemplos e exemplos aprovados)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShowVoiceProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: updateShowVoiceProfile
+      summary: Substitui a parte editável do perfil de voz
+      description: >
+        Substitui tom e anti-exemplos por inteiro (semântica PUT). Os exemplos
+        são somente-leitura: crescem sozinhos a cada aprovação de episódio
+        (spec 0003).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShowVoiceProfileUpdate"
+      responses:
+        "200":
+          description: Perfil de voz atualizado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShowVoiceProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /episodes:
     post:
@@ -325,6 +489,13 @@ components:
       schema:
         type: string
         format: uuid
+    ShowId:
+      name: showId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
 
   responses:
     BadRequest:
@@ -349,6 +520,81 @@ components:
             $ref: "#/components/schemas/ApiError"
 
   schemas:
+    Show:
+      type: object
+      required: [id, name, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name:
+          type: string
+          maxLength: 120
+          description: Nome do podcast, ex. "Expulsando Demônios".
+        description:
+          type: string
+          maxLength: 500
+          description: Sobre o que é o show; entra no contexto da geração (spec 0003).
+        episodeCount:
+          type: integer
+          description: Episódios do show em qualquer estado; 0 permite DELETE.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ShowCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 500 }
+
+    ShowPatch:
+      type: object
+      description: Todos os campos opcionais; apenas os enviados são atualizados.
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 500 }
+
+    ShowVoiceProfile:
+      type: object
+      required: [toneDescription, antiExamples, examples]
+      properties:
+        toneDescription:
+          type: string
+          maxLength: 1000
+          description: >
+            Tom mantido pelo criador, ex. "irreverente, filosófico, humor
+            ácido, primeira pessoa". Vazio até ser preenchido.
+        antiExamples:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 200 }
+          description: Padrões vetados, ex. "Neste episódio, exploramos…".
+        examples:
+          type: array
+          readOnly: true
+          description: >
+            Few-shot acumulado: títulos e descrições de episódios aprovados.
+            Cresce sozinho em IN_REVIEW → READY; não é editável por esta API.
+          items:
+            type: object
+            required: [episodeId, title, approvedAt]
+            properties:
+              episodeId: { type: string, format: uuid }
+              title: { type: string }
+              description: { type: string }
+              approvedAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ShowVoiceProfileUpdate:
+      type: object
+      required: [toneDescription, antiExamples]
+      description: Substituição integral da parte editável do perfil.
+      properties:
+        toneDescription: { type: string, maxLength: 1000 }
+        antiExamples:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 200 }
+
     EpisodeStatus:
       type: string
       enum:

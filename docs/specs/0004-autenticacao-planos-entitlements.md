@@ -56,8 +56,12 @@ O custo real do sistema é proporcional a **minutos de áudio processados** — 
 ## API (refletido em `contracts/openapi/core-api.v1.yaml`)
 
 - `GET /me` — perfil, plano vigente e consumo do período (minutos usados/limite, shows usados/limite).
+- `GET/POST /shows`, `GET/PATCH/DELETE /shows/{showId}` — CRUD do agregado dono dos episódios.
+- `GET/PUT /shows/{showId}/voice-profile` — parte editável do perfil de voz (spec 0003); os exemplos são somente-leitura e crescem na aprovação.
 - Todas as rotas: `401` sem autenticação; `404` para recurso de outro usuário; `403 PLAN_QUOTA_EXCEEDED` no upload sem saldo.
 - Security scheme: `bearerAuth` (JWT) global.
+
+> **Nota (2026-07-28), contrato v1.2.0:** o estouro de `maxShows` acontece em `POST /shows`, não em `POST /episodes`, e recebeu código próprio — `403 PLAN_SHOW_LIMIT_EXCEEDED`. O `PLAN_QUOTA_EXCEEDED` fica reservado ao saldo de minutos no upload: são condições distintas, com mensagens e ações distintas na UI (comprar mais minutos × apagar/consolidar shows). Refina a redação do item "Enforcement de cota", que atribuía ambas as rejeições ao upload.
 
 ## Critérios de aceite
 
