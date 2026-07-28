@@ -22,7 +22,9 @@ Infra Azure: Container Apps, PostgreSQL Flexible Server, Blob Storage, Service B
 
 ## Máquina de estados do episódio
 
-`RECEIVED → AUDIO_PROCESSING → TRANSCRIBING → GENERATING → IN_REVIEW → READY`, com `FAILED` alcançável de qualquer estado de processamento. Fonte da verdade: Postgres. Spec: `docs/specs/0001-pipeline-mvp.md`.
+`PENDING_UPLOAD → RECEIVED → AUDIO_PROCESSING → TRANSCRIBING → GENERATING → IN_REVIEW → READY`, com `FAILED` alcançável de qualquer estado de processamento. Fonte da verdade: Postgres. Spec: `docs/specs/0001-pipeline-mvp.md`.
+
+O áudio bruto **não** trafega pelo Core API: o upload vai direto do browser para o Blob via SAS de escrita de escopo mínimo, e o pipeline só arranca na confirmação (ADR-0011).
 
 ## Regras do projeto
 
@@ -34,7 +36,7 @@ Infra Azure: Container Apps, PostgreSQL Flexible Server, Blob Storage, Service B
 
 ## Convenções por serviço
 
-- **Java:** Gradle (Kotlin DSL), pacote raiz `dev.lavra`. Preferir os recursos do Spring Boot 4 (HTTP service clients declarativos, `@Retryable`/`@ConcurrencyLimit`, API versioning) — parte do valor de portfólio é demonstrá-los.
+- **Java:** Gradle (Kotlin DSL), pacote raiz `dev.lavra`. Migrations com **Flyway em SQL puro**, forward-only, e o ORM nunca gera DDL (`ddl-auto: validate`) — ADR-0010. Preferir os recursos do Spring Boot 4 (HTTP service clients declarativos, `@Retryable`/`@ConcurrencyLimit`, API versioning) — parte do valor de portfólio é demonstrá-los.
 - **Python:** gerenciado com `uv`, lint/format com `ruff`, type hints obrigatórios.
 - **TypeScript:** Next.js App Router, `pnpm`.
 - **FFmpeg:** parâmetros de áudio definidos em `docs/specs/0002-processamento-de-audio.md` — não inventar valores.
