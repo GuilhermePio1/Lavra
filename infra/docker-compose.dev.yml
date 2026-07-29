@@ -118,5 +118,9 @@ volumes:
 #   Service Bus: Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
 #   OIDC issuer: http://host.docker.internal:8081/lavra
 #     discovery: http://host.docker.internal:8081/lavra/.well-known/openid-configuration
-#     get a token by hand: http://localhost:8081/lavra/debugger
+#     get a token by hand: http://host.docker.internal:8081/lavra/debugger
+#       (NOT localhost:8081 — mock-oauth2-server stamps `iss` from the Host
+#       header it received, so a token fetched via localhost carries
+#       iss=http://localhost:8081/lavra and core-api, configured for
+#       host.docker.internal, rejects it with a 401 that gives no reason why)
 #     add claims (e.g. "roles": ["ADMIN"]) on the interactive login screen

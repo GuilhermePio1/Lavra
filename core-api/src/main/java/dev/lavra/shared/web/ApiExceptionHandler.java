@@ -1,5 +1,6 @@
 package dev.lavra.shared.web;
 
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -24,10 +25,12 @@ class ApiExceptionHandler {
     ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
-                .reduce((a, b) -> a + "; " + b)
-                .orElse("Invalid request");
+                .collect(Collectors.joining("; "));
         return ResponseEntity.badRequest()
-                .body(new ApiError(ApiError.VALIDATION_ERROR, message));
+                // A class-level constraint fails with no field error attached:
+                // the request is invalid, but there is nothing to join.
+                .body(new ApiError(ApiError.VALIDATION_ERROR,
+                        message.isEmpty() ? "Invalid request" : message));
     }
 
     /**

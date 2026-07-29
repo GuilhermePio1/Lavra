@@ -37,8 +37,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 @AutoConfigureMockMvc
 @Testcontainers
 @TestPropertySource(properties = {
-        // Never contacted: the tests either send no token at all, or supply an
-        // already-decoded one. Present so the resource server can configure.
+        // Never contacted, and no test here may make it so: every test either
+        // sends no token at all or supplies an already-decoded one, neither of
+        // which materialises the decoder. A test that sends a token string for
+        // the decoder to parse belongs in DevOidcEmulatorIT, where the issuer
+        // actually answers. Present so the resource server can configure.
         "spring.security.oauth2.resourceserver.jwt.issuer-uri=http://localhost:8081/lavra"
 })
 class IdentityIT {
@@ -67,15 +70,6 @@ class IdentityIT {
     @DisplayName("no token: 401 with the ApiError body of the contract")
     void rejectsRequestWithoutToken() throws Exception {
         mockMvc.perform(get("/api/v1/me"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
-                .andExpect(jsonPath("$.message").isNotEmpty());
-    }
-
-    @Test
-    @DisplayName("a malformed token also answers the ApiError body, not an empty 401")
-    void rejectsMalformedTokenWithApiError() throws Exception {
-        mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer not-a-jwt"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
                 .andExpect(jsonPath("$.message").isNotEmpty());

@@ -197,6 +197,23 @@ class DevOidcEmulatorIT {
                 .andExpect(status().isOk());
     }
 
+    /**
+     * Lives here rather than in {@code IdentityIT} because a string that is not
+     * a JWT is still a token the decoder has to parse — which forces the lazy
+     * {@code JwtDecoder} to resolve against the issuer. With an unreachable
+     * issuer the failure is a {@code JwtDecoderInitializationException}, which
+     * Spring Security deliberately rethrows instead of answering 401: an IdP we
+     * cannot reach is not the same as a token we rejected.
+     */
+    @Test
+    @DisplayName("a malformed token also answers the ApiError body, not an empty 401")
+    void rejectsMalformedTokenWithApiError() throws Exception {
+        mockMvc.perform(get("/api/v1/me").header("Authorization", "Bearer not-a-jwt"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"))
+                .andExpect(jsonPath("$.message").isNotEmpty());
+    }
+
     @Test
     @DisplayName("a token from another issuer is rejected")
     void rejectsTokenFromAnotherIssuer() throws Exception {

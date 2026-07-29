@@ -4,6 +4,8 @@ import dev.lavra.shared.web.ApiError;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+
+import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
@@ -27,15 +29,15 @@ class ApiErrorAuthenticationEntryPoint implements AuthenticationEntryPoint, Acce
     }
 
     @Override
-    public void commence(HttpServletRequest request, HttpServletResponse response,
-                         AuthenticationException authException) throws IOException {
+    public void commence(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
+                         @NonNull AuthenticationException authException) throws IOException {
         write(response, HttpStatus.UNAUTHORIZED,
                 new ApiError(ApiError.UNAUTHORIZED, "Missing, invalid or expired token"));
     }
 
     @Override
-    public void handle(HttpServletRequest request, HttpServletResponse response,
-                       AccessDeniedException accessDeniedException) throws IOException {
+    public void handle(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response,
+                       @NonNull AccessDeniedException accessDeniedException) throws IOException {
         write(response, HttpStatus.FORBIDDEN,
                 new ApiError(ApiError.FORBIDDEN, "Insufficient permissions"));
     }

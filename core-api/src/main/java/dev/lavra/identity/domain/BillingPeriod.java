@@ -36,7 +36,8 @@ public record BillingPeriod(Instant start, Instant end) {
      * This period if it still contains {@code moment}, otherwise the monthly
      * period that does. Advancing month by month (rather than jumping straight
      * to {@code moment}) keeps the billing day stable across a gap of several
-     * idle months.
+     * idle months — stable up to the drift documented on the type, which a
+     * short month makes permanent.
      */
     public BillingPeriod rolledTo(Instant moment) {
         BillingPeriod current = this;
