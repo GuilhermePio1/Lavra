@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: core-api
+
+  # Defaults match infra/docker-compose.dev.yml so the service runs against the
+  # local stack with no extra setup. Every value is overridable by environment
+  # variable; in Azure they come from Key Vault.
+  datasource:
+    url: ${LAVRA_DB_URL:jdbc:postgresql://localhost:5433/lavra}
+    username: ${LAVRA_DB_USERNAME:lavra}
+    password: ${LAVRA_DB_PASSWORD:lavra_dev}
+
+  jpa:
+    # The ORM never generates DDL — Flyway owns the schema (ADR-0010).
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate.jdbc.time_zone: UTC
+
+  flyway:
+    enabled: true
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Same security configuration in every environment: only the issuer
+          # changes (ADR-0012). Locally this is the mock-oauth2-server.
+          issuer-uri: ${LAVRA_OIDC_ISSUER_URI:http://host.docker.internal:8081/lavra}
+          audiences: ${LAVRA_OIDC_AUDIENCE:api://lavra-core}
+
+server:
+  port: ${LAVRA_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
