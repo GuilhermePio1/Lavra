@@ -20,7 +20,7 @@ Usaremos **Spring Data JPA com Hibernate** para todo o acesso a dados do core-ap
 
 ## Consequências
 
-- Repositories declarativos expressam a regra de posse diretamente na assinatura (`findByIdAndOwnerId`), o que torna difícil escrever por acidente a consulta que vazaria o recurso de outro usuário — a defesa fica no lugar mais barato possível.
+- Repositories declarativos expressam a regra de posse diretamente na assinatura (`findByIdAndUserId`), o que coloca a defesa no lugar mais barato possível. Para que isso seja garantia e não convenção, o repository de agregado com posse estende `Repository` e declara os métodos que expõe, em vez de estender `JpaRepository` — a base conveniente herdaria `findById`, `getReferenceById` e `findAll`, e a consulta que vaza o recurso de outro usuário voltaria a ser escrevível por acidente. O preço é declarar `save` e `delete` à mão; a implementação continua sendo a padrão do Spring Data. Agregados sem dono (o catálogo de planos) ou chaveados pelo próprio usuário seguem em `JpaRepository`.
 - Integra-se sem atrito ao restante da stack: transações declarativas, auditoria de timestamps e Testcontainers funcionam com a configuração padrão do Spring Boot 4.
 - O custo real: Hibernate esconde o SQL emitido, e lazy loading, `open-in-view` e N+1 são problemas de produção que não aparecem em teste unitário. Mitigação: `open-in-view: false` desde o primeiro commit e fetch explícito onde houver associação.
 - A agregação do ledger fica mais legível em SQL do que em JPQL. Consultas desse tipo usarão query nativa em vez de forçar o ORM — e isso é escolha consciente, não exceção a ser escondida.

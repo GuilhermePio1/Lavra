@@ -27,7 +27,7 @@ spring:
         jwt:
           # Same security configuration in every environment: only the issuer
           # changes (ADR-0012). Locally this is the mock-oauth2-server.
-          issuer-uri: ${LAVRA_OIDC_ISSUER_URI:http://host.docker.internal:8081/lavra}
+          issuer-uri: ${LAVRA_OIDC_ISSUER_URI:http://localhost:8081/lavra}
           audiences: ${LAVRA_OIDC_AUDIENCE:api://lavra-core}
 
 server:

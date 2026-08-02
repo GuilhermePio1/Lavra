@@ -63,8 +63,13 @@ services:
         condition: service_healthy
 
   # OIDC emulator standing in for Entra External ID (ADR-0012).
-  # `hostname: host.docker.internal` makes the issuer URL resolve identically
-  # from inside the compose network and from the browser on the host.
+  # The issuer is `localhost`, deliberately: mock-oauth2-server stamps `iss` from
+  # the Host header of the request that asked for the token, so the name the
+  # browser types is the name that ends up in the token — and `localhost` is the
+  # only one that needs no DNS, no hosts file and no DHCP lease to keep working.
+  # The core-api runs on the host, so nothing inside this network resolves the
+  # issuer; the day it becomes a container here, this has to be revisited
+  # (ADR-0012).
   # `$${subject}` is escaped so compose does not interpolate it: the mock server
   # expands it to whatever user name is typed on the interactive login screen.
   #
@@ -80,7 +85,6 @@ services:
   oidc:
     image: ghcr.io/navikt/mock-oauth2-server:5.0.2
     container_name: lavra-oidc
-    hostname: host.docker.internal
     ports:
       - "8081:8081"
     environment:
@@ -116,11 +120,11 @@ volumes:
 #   Postgres:    jdbc:postgresql://localhost:5433/lavra (lavra / lavra_dev)
 #   Blob:        UseDevelopmentStorage=true  (Azurite well-known account)
 #   Service Bus: Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
-#   OIDC issuer: http://host.docker.internal:8081/lavra
-#     discovery: http://host.docker.internal:8081/lavra/.well-known/openid-configuration
-#     get a token by hand: http://host.docker.internal:8081/lavra/debugger
-#       (NOT localhost:8081 — mock-oauth2-server stamps `iss` from the Host
-#       header it received, so a token fetched via localhost carries
-#       iss=http://localhost:8081/lavra and core-api, configured for
-#       host.docker.internal, rejects it with a 401 that gives no reason why)
+#   OIDC issuer: http://localhost:8081/lavra
+#     discovery: http://localhost:8081/lavra/.well-known/openid-configuration
+#     get a token by hand: http://localhost:8081/lavra/debugger
+#       (use localhost and nothing else — mock-oauth2-server stamps `iss` from
+#       the Host header it received, so a token fetched via any other name
+#       carries that name in `iss` and core-api rejects it with a 401 that gives
+#       no reason why)
 #     add claims (e.g. "roles": ["ADMIN"]) on the interactive login screen

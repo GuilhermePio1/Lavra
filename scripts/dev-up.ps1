@@ -18,7 +18,7 @@ Write-Host "Infraestrutura no ar:" -ForegroundColor Green
 Write-Host "  Postgres     -> localhost:5433  (db: lavra, user: lavra, senha: lavra_dev)"
 Write-Host "  Blob/Azurite -> localhost:10000 (UseDevelopmentStorage=true)"
 Write-Host "  Service Bus  -> localhost:5672  (UseDevelopmentEmulator=true)"
-Write-Host "  OIDC         -> localhost:8081  (issuer: http://host.docker.internal:8081/lavra)"
+Write-Host "  OIDC         -> localhost:8081  (issuer: http://localhost:8081/lavra)"
 Write-Host ""
 Write-Host "Filas criadas: episode-uploaded, media-processed, processing-failed"
 Write-Host "Token na mao: http://localhost:8081/lavra/debugger"
