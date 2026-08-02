@@ -21,6 +21,18 @@ class ApiExceptionHandler {
                 .body(new ApiError(ApiError.NOT_FOUND, ex.getMessage()));
     }
 
+    @ExceptionHandler(PlanLimitExceededException.class)
+    ResponseEntity<ApiError> handlePlanLimit(PlanLimitExceededException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(new ApiError(ex.getCode(), ex.getMessage()));
+    }
+
+    @ExceptionHandler(ResourceConflictException.class)
+    ResponseEntity<ApiError> handleConflict(ResourceConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new ApiError(ex.getCode(), ex.getMessage()));
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()
