@@ -30,6 +30,17 @@ spring:
           issuer-uri: ${LAVRA_OIDC_ISSUER_URI:http://localhost:8081/lavra}
           audiences: ${LAVRA_OIDC_AUDIENCE:api://lavra-core}
 
+lavra:
+  blob:
+    # Azurite's well-known development account; in Azure this is a Key Vault
+    # secret. The raw audio goes to raw/{episodeId}/, the worker's output to
+    # processed/{episodeId}/ — prefixes in one container, not separate ones.
+    connection-string: ${LAVRA_BLOB_CONNECTION_STRING:UseDevelopmentStorage=true}
+    container: ${LAVRA_BLOB_CONTAINER:episodes}
+
+  messaging:
+    connection-string: ${LAVRA_SERVICEBUS_CONNECTION_STRING:Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;}
+
 server:
   port: ${LAVRA_PORT:8080}
 
