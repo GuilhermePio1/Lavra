@@ -90,7 +90,15 @@ Pré-requisitos: Docker Desktop.
 
 Em Linux/macOS: `docker compose -f infra/docker-compose.dev.yml up -d`.
 
-**Nenhuma conta Azure é necessária para rodar localmente.** A autenticação em desenvolvimento usa um emulador de OIDC no lugar do Entra ([ADR-0012](docs/adr/0012-autenticacao-no-desenvolvimento-local.md)): pegue um token em `http://localhost:8081/lavra/debugger` e troque de usuário na tela de login para exercitar posse e papéis.
+**Nenhuma conta Azure é necessária para rodar localmente.** A autenticação em desenvolvimento usa um emulador de OIDC no lugar do Entra ([ADR-0012](docs/adr/0012-autenticacao-no-desenvolvimento-local.md)): pegue um token em `http://localhost:8081/lavra/debugger` e troque de usuário na tela de login para exercitar posse e papéis. Blob e Service Bus também são emuladores (Azurite e o emulador oficial do Service Bus), e o core-api aponta para eles por padrão ([ADR-0015](docs/adr/0015-acesso-ao-blob-e-ao-service-bus-no-core-api.md)).
+
+Testes do core-api:
+
+```powershell
+cd core-api
+.\gradlew test          # suíte padrão — sobe só o Postgres e o Azurite via Testcontainers
+.\gradlew emulatorTest  # publicação real no Service Bus; puxa SQL Server, leva minutos
+```
 
 Cada serviço terá seu próprio README com instruções de build e execução.
 
