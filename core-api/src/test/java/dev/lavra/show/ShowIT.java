@@ -77,12 +77,17 @@ class ShowIT {
     }
 
     /**
-     * Inserts an episode straight into the table: the episode slice does not
-     * exist yet, and what is being tested is the show's reaction to episodes
-     * existing at all.
+     * Inserts an episode straight into the table rather than going through the
+     * upload flow: what is being tested is the show's reaction to episodes
+     * existing at all, not how they got there. The declaration columns are
+     * filled because the schema requires every episode to have one.
      */
     private void insertEpisode(String showId) {
-        jdbcClient.sql("insert into episodes (id, show_id, status) values (:id, :showId, 'RECEIVED')")
+        jdbcClient.sql("""
+                        insert into episodes (id, show_id, status,
+                                              original_filename, content_type, size_bytes)
+                        values (:id, :showId, 'RECEIVED', 'episodio.mp3', 'audio/mpeg', 1024)
+                        """)
                 .param("id", UUID.randomUUID())
                 .param("showId", UUID.fromString(showId))
                 .update();
