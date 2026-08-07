@@ -51,7 +51,7 @@ class AzureBlobStorageIT {
 
     @BeforeAll
     static void setUp() {
-        storage = new AzureBlobStorage(containerClient(), CLOCK);
+        storage = new AzureBlobStorage(containerClient(), CLOCK, true);
     }
 
     private static BlobContainerClient containerClient() {
@@ -137,7 +137,7 @@ class AzureBlobStorageIT {
     @DisplayName("an expired ticket is refused, so the TTL is not decorative")
     void expiredTicketIsRefused() {
         Clock threeHoursAgo = Clock.fixed(NOW.minus(Duration.ofHours(3)), ZoneOffset.UTC);
-        AzureBlobStorage inThePast = new AzureBlobStorage(containerClient(), threeHoursAgo);
+        AzureBlobStorage inThePast = new AzureBlobStorage(containerClient(), threeHoursAgo, true);
 
         WriteTicket ticket = inThePast.issueWriteTicket(somePath(), TTL);
         assertThat(ticket.expiresAt()).isBefore(NOW);

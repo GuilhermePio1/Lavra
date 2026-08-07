@@ -37,7 +37,7 @@ class BlobConfiguration {
     }
 
     @Bean
-    BlobStorage blobStorage(BlobContainerClient container, Clock clock) {
-        return new AzureBlobStorage(container, clock);
+    BlobStorage blobStorage(BlobContainerClient container, Clock clock, BlobStorageProperties properties) {
+        return new AzureBlobStorage(container, clock, properties.autoCreateContainer());
     }
 }

@@ -1,16 +1,22 @@
 # ADR-0015: Acesso ao Blob Storage e ao Service Bus no core-api
 
 - **Status:** aceito
-- **Data:** 2026-08-04
+- **Data:** 2026-08-04 (revisto em 2026-08-06: contrato de falha dos ports)
 - **Substitui / Substituído por:** —
 
 ## Contexto
 
 O ADR-0013 estabeleceu que Blob, Service Bus e Claude ficam atrás de *ports*, mas não disse onde eles moram nem como o serviço se autentica. Três forças concretas apareceram na implementação. Primeira: quem assina a SAS de escrita do ADR-0011 precisa de uma credencial, e as duas opções — chave da conta ou *user delegation key* obtida por identidade gerenciada — têm perfis de segurança bem diferentes. Segunda: o Blob não pertence a uma feature só (o `episode` escreve o áudio bruto, o `content` lerá a transcrição), então colocá-lo dentro de `episode/` criaria dependência entre fatias. Terceira: o emulador do Service Bus só roda acompanhado de um SQL Server (~1,5 GB de imagem, minutos de subida), o que é caro demais para toda execução de `gradle test` num projeto de um desenvolvedor só.
 
+Uma quarta força apareceu na revisão do código, dois dias depois: os ports diziam o que devolvem, mas não o que acontece quando o Azure está inacessível. Na prática o `describe` relançava `BlobStorageException`, um tipo do SDK, de dentro de uma interface cuja razão de existir é manter o SDK longe das fatias.
+
 ## Decisão
 
 Os ports de Blob e Service Bus ficam em `shared/blob` e `shared/messaging`, ambos autenticados por **connection string** — a SAS é assinada com a chave da conta, isolada num único método do adapter para que a migração para *user delegation SAS* seja uma troca local. O emulador do Service Bus fica **fora da suíte padrão** (`@Tag("emulator")`, tarefa `emulatorTest`), e a garantia de contrato no dia a dia vem de um `EventPublisher` de teste que valida cada mensagem contra o JSON Schema de `contracts/events/` antes de aceitá-la.
+
+**O tipo da exceção faz parte do contrato do port.** Nenhum tipo do SDK do Azure atravessa a interface: falhas saem como `BlobAccessException` e `EventPublishException`, declaradas em `@throws` na interface. Não são para serem capturadas — não existe compensação para o storage estar fora, e chegar ao `ApiExceptionHandler` como 500 é o comportamento certo; são declaradas para que o contrato seja **lido** em vez de descoberto, e para que uma política de retry tenha um tipo em que se apoiar. Um só tipo por port, sem hierarquia de transitório/permanente, enquanto nenhum código ramificar nessa diferença.
+
+**A criação do container passa a ser configurável** (`lavra.blob.auto-create-container`, ligada localmente, desligada onde a IaC já criou o container). Desligada, emitir um write ticket não faz nenhuma chamada de rede.
 
 ## Alternativas consideradas
 
@@ -18,6 +24,9 @@ Os ports de Blob e Service Bus ficam em `shared/blob` e `shared/messaging`, ambo
 - **Ports dentro de `episode/`** — seria a leitura literal do package-by-feature, mas o `content` também vai ler blobs, e uma fatia importando `episode.storage` inverte a fronteira que o ADR-0013 existe para proteger. Infraestrutura genuinamente compartilhada em `shared` é a exceção honesta.
 - **Emulador do Service Bus em todo `gradle test`** — daria cobertura real de entrega a cada execução, mas transformaria a suíte de segundos em minutos e tornaria o build dependente de baixar SQL Server. O teste existe e é obrigatório rodar ao mexer no publisher ou nos nomes de fila; só não roda por padrão.
 - **Só validar o envelope contra o schema, sem emulador nenhum** — mais barato ainda, mas ninguém verificaria que a mensagem chega na fila com `messageId` e `contentType` corretos até o media-worker existir, que é tarde demais para descobrir.
+- **Deixar a exceção do SDK vazar pelo port** — é o que o código fazia: `describe` relançava `BlobStorageException`. Funciona, e ninguém captura mesmo. Mas torna o port meia-abstração: a assinatura não menciona Azure e o contrato de falha sim, então qualquer tentativa futura de tratar a falha — um retry, um circuit breaker, um log com o status — obriga `import com.azure` fora de `shared/`. A fronteira que o ADR-0013 existe para proteger não é feita só de assinaturas.
+- **Hierarquia de exceções transitória/permanente** — permitiria um retry só do que pode dar certo na segunda tentativa. Foi recusada porque o adapter não distingue os dois casos de forma confiável: um 403 de chave expirada, um container inexistente e uma conta fora do ar chegam pelo mesmo caminho. Classificar sem alguém para consumir a classificação produz rótulos que envelhecem errados em silêncio.
+- **Envolver a falha de serialização junto com a de broker** — daria um tipo só para "publicar não deu certo". Recusada de propósito: um payload que o mapper não escreve é bug de quem chamou e falharia idêntico em toda tentativa, então unificar convidaria um retry a queimar tentativas num erro determinístico.
 
 ## Consequências
 
@@ -26,3 +35,7 @@ Os ports de Blob e Service Bus ficam em `shared/blob` e `shared/messaging`, ambo
 - Qualquer teste de fatia que publique um evento ganha validação de contrato de graça: o publisher de teste recusa payload fora do schema, então um `data` que divirja de `contracts/events/` derruba um teste mesmo sem broker envolvido.
 - O custo é que a cobertura de entrega real depende de disciplina humana — `gradle emulatorTest` não roda sozinho. Quando houver CI, o lugar dele é um job noturno ou um gate de merge, não o build de cada commit.
 - Nenhum dos dois ports abre conexão na subida do contexto (o contêiner do Blob é criado no primeiro uso, o sender do bus no primeiro envio), então os testes de fatia que não tocam em infraestrutura externa continuam subindo sem Azurite nem broker.
+- Reconhecer "o Azure está fora" exigiu olhar a **causa**, não o tipo. O cliente síncrono de storage não relata um endereço inalcançável como nenhum tipo do Azure: relata como um `java.lang.RuntimeException` cru embrulhando um `IOException` — descoberto ao escrever o teste, depois de a primeira versão do `catch` (só `AzureException` e `UncheckedIOException`) deixar passar justamente o caso principal. O adapter portanto trata como falha de infraestrutura o que for tipo declarado do Azure **ou** tiver `IOException` na cadeia de causas, e deixa o resto passar como está — um `NullPointerException` do próprio adapter não deve ser reportado a quem opera como indisponibilidade do Azure.
+- Existe um teste de falha por port (`AzureBlobStorageFailureTest`, `ServiceBusEventPublisherFailureTest`) apontando para uma porta fechada em `127.0.0.1`. Ambos rodam no `gradle test` padrão, sem Docker e em segundos: verificar que a falha atravessa o port como tipo do port não precisa de infraestrutura de verdade, só de infraestrutura ausente.
+- Emitir um write ticket com `auto-create-container` desligado é uma operação puramente local — a assinatura é um HMAC sobre a chave da conta, calculado no processo — e por isso não falha com o storage inacessível. Isso está fixado por teste, não só documentado. O efeito prático: o endpoint que devolve a URL de upload sobrevive a uma indisponibilidade do storage, e o erro aparece só quando o browser tenta escrever de fato.
+- Fica ligada por padrão porque não há IaC ainda no repositório e o compose sobe o Azurite vazio. Quando a IaC criar o container, `LAVRA_BLOB_AUTO_CREATE_CONTAINER=false` é a única mudança necessária — se for esquecida, o custo é uma chamada HTTP a mais por ticket, não uma falha.
