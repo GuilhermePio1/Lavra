@@ -49,6 +49,7 @@ O áudio bruto **não** trafega pelo Core API: o upload vai direto do browser pa
 - SO do desenvolvedor: **Windows 11** (PowerShell). Scripts em `scripts/*.ps1`.
 - `scripts/dev-up.ps1` sobe Postgres + Azurite + emulador do Service Bus + emulador de OIDC (`infra/docker-compose.dev.yml`).
 - Segredos **nunca** em código ou compose: local via variáveis de ambiente/`.env` (gitignored); produção via Key Vault.
+- Os defaults do `application.yml` apontam para o stack local. O `DevelopmentDefaultsGuard` **recusa a subida** se o issuer OIDC não for local e alguma connection string ainda apontar para Azurite/emulador — ADR-0016. `@ConfigurationProperties` de infraestrutura levam `@Validated` + Jakarta Validation, para que valor vazio ou inválido derrube o arranque em vez do primeiro upload.
 
 ## Skills disponíveis
 
