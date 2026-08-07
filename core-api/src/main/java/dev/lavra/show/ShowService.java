@@ -102,6 +102,20 @@ public class ShowService {
         showRepository.delete(show);
     }
 
+    /**
+     * Fails with the slice's own 404 unless the show exists and belongs to the
+     * user. What other slices call before hanging something off a show — the
+     * episode slice on every upload and on a filtered listing.
+     *
+     * <p>Deliberately not a boolean: an ownership question answered with
+     * {@code false} invites a caller to decide what that means, and there is
+     * only one right answer to it.
+     */
+    @Transactional(readOnly = true)
+    public void requireOwned(UUID showId, UUID userId) {
+        ownedShow(showId, userId);
+    }
+
     @Transactional(readOnly = true)
     public VoiceProfile voiceProfile(UUID showId, UUID userId) {
         return ownedShow(showId, userId).voiceProfile();
